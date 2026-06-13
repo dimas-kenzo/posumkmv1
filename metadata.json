@@ -1,0 +1,6 @@
+{
+  "name": "Kasir POS UMKM",
+  "description": "Aplikasi Point of Sale / Kasir modern dan responsif untuk UMKM dengan visual profesional, pengelolaan produk, keranjang belanja, dan pratinjau cetak struk.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
