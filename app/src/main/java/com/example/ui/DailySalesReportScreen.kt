@@ -32,6 +32,15 @@ import com.example.ui.theme.NavySecondary
 import com.example.ui.theme.TealAccent
 import com.example.viewmodel.GroupedProductSales
 import com.example.viewmodel.POSViewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
+fun formatIndonesianDateReport(timestamp: Long): String {
+    val sdf = SimpleDateFormat("EEEE, d MMMM yyyy", Locale("id", "ID"))
+    return sdf.format(Date(timestamp))
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,8 +56,39 @@ fun DailySalesReportScreen(
     val totalTransactions by viewModel.totalTransactionsToday.collectAsState()
     val totalItemsSold by viewModel.totalItemsSoldToday.collectAsState()
     val groupedSales by viewModel.groupedSalesToday.collectAsState()
+    val selectedReportDate by viewModel.selectedReportDate.collectAsState()
     
     var isTableView by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    // Dialog Pemilih Tanggal Material 3
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = selectedReportDate
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let {
+                            viewModel.selectReportDate(it)
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("Pilih", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Batal")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 
     Column(
         modifier = modifier
@@ -80,40 +120,85 @@ fun DailySalesReportScreen(
             
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Laporan Penjualan Harian",
+                    text = "Laporan Penjualan",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "Ringkasan performa penjualan hari ini",
+                    text = "Performa penjualan berdasarkan tanggal",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
             }
+        }
+
+        // Row Navigasi Hari & Pemilih Tanggal
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val oneDayMillis = 24 * 60 * 60 * 1000L
             
-            // Tombol Ekspor ke Google Sheets
-            Button(
+            // Hari Sebelumnya
+            FilledTonalIconButton(
                 onClick = {
-                    Toast.makeText(context, "Mengekspor laporan ke Google Sheets...", Toast.LENGTH_SHORT).show()
+                    viewModel.selectReportDate(selectedReportDate - oneDayMillis)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = MintSuccess),
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                modifier = Modifier.testTag("btn_export_sheets")
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag("btn_prev_day")
             ) {
                 Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = "Ekspor Google Sheets",
-                    tint = Color.White,
+                    imageVector = Icons.Default.ChevronLeft,
+                    contentDescription = "Hari Sebelumnya"
+                )
+            }
+
+            // Tombol Pilih Tanggal (Dropdown/Kalender)
+            Button(
+                onClick = { showDatePicker = true },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp)
+                    .padding(horizontal = 8.dp)
+                    .testTag("btn_pick_date")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CalendarToday,
+                    contentDescription = "Pilih Tanggal",
                     modifier = Modifier.size(16.dp)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Ekspor",
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
+                    text = formatIndonesianDateReport(selectedReportDate),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Hari Berikutnya
+            FilledTonalIconButton(
+                onClick = {
+                    viewModel.selectReportDate(selectedReportDate + oneDayMillis)
+                },
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag("btn_next_day")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Hari Berikutnya"
                 )
             }
         }
@@ -133,7 +218,7 @@ fun DailySalesReportScreen(
                     .padding(20.dp)
             ) {
                 Text(
-                    text = "TOTAL OMZET HARI INI",
+                    text = "OMZET PADA TANGGAL PILIHAN",
                     style = MaterialTheme.typography.labelLarge,
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.SemiBold
@@ -308,7 +393,10 @@ fun DailySalesReportScreen(
                     .padding(32.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Icon(
                         imageVector = Icons.Default.Inbox,
                         contentDescription = "Kosong",
@@ -317,18 +405,39 @@ fun DailySalesReportScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Belum Ada Penjualan Hari Ini",
+                        text = "Belum Ada Penjualan Pada Tanggal Ini",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
                     )
                     Text(
-                        text = "Setiap transaksi checkout sukses otomatis tercatat di sini.",
+                        text = "Setiap transaksi yang lunas pada tanggal ini otomatis tercatat di sini. Tidak ada data dummy bawaan.",
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Button(
+                        onClick = {
+                            viewModel.addSampleTransactionForDate(selectedReportDate)
+                            Toast.makeText(context, "Selesai menyimulasikan transaksi untuk tanggal terpilih!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.testTag("btn_simulate_sales")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AddCircleOutline,
+                            contentDescription = "Simulasi",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Simulasikan Transaksi Tanggal Ini")
+                    }
                 }
             }
         } else {

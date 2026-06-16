@@ -31,29 +31,70 @@ class POSViewModel(val repository: ProductRepository = ProductRepository()) : Vi
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
-    // State transaksi harian (dengan dummy data awal harian)
+    // State transaksi harian (diawali kosong tanpa data dummy sesuai instruksi)
     private val _transactions = MutableStateFlow<List<Transaction>>(emptyList())
     val transactions = _transactions.asStateFlow()
 
-    init {
-        _transactions.value = getDummyTransactions()
+    // State tanggal filter laporan aktif (default: hari ini)
+    private val _selectedReportDate = MutableStateFlow(System.currentTimeMillis())
+    val selectedReportDate = _selectedReportDate.asStateFlow()
+
+    fun selectReportDate(timestamp: Long) {
+        _selectedReportDate.value = timestamp
     }
 
-    // State ringkasan laporan harian
-    val totalRevenueToday: StateFlow<Double> = _transactions.map { list ->
+    // Melakukan simulasi transaksi untuk memudahkan uji coba laporan tanggal tertentu
+    fun addSampleTransactionForDate(timestamp: Long) {
+        val products = repository.getProducts()
+        if (products.isEmpty()) return
+        
+        val p1 = products.getOrNull(0) ?: Product("P001", "Kopi Susu Gula Aren", 15000.0, "Minuman", 45)
+        val p2 = products.getOrNull(1) ?: Product("P002", "Es Teh Manis", 5000.0, "Minuman", 80)
+        val p3 = products.getOrNull(2) ?: Product("P003", "Roti Bakar Keju Cokelat", 12000.0, "Makanan", 15)
+        
+        val uniqueSuffix = (100..999).random()
+        val newTx = Transaction(
+            id = "TRX-MOCK-$uniqueSuffix",
+            timestamp = timestamp,
+            items = listOf(
+                CartItem(p1, 2),
+                CartItem(p2, 2),
+                CartItem(p3, 1)
+            ),
+            totalPay = (p1.price * 2) + (p2.price * 2) + p3.price
+        )
+        _transactions.update { it + newTx }
+    }
+
+    // Mengambil transaksi yang hanya terjadi pada tanggal yang dipilih
+    val filteredTransactionsReport: StateFlow<List<Transaction>> = combine(
+        _transactions,
+        _selectedReportDate
+    ) { list, selectedMills ->
+        val calSelected = Calendar.getInstance().apply { timeInMillis = selectedMills }
+        val calTx = Calendar.getInstance()
+        list.filter { tx ->
+            calTx.timeInMillis = tx.timestamp
+            calSelected.get(Calendar.YEAR) == calTx.get(Calendar.YEAR) &&
+                    calSelected.get(Calendar.DAY_OF_YEAR) == calTx.get(Calendar.DAY_OF_YEAR)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // State ringkasan laporan harian berdasarkan tanggal filter yang dipilih
+    val totalRevenueToday: StateFlow<Double> = filteredTransactionsReport.map { list ->
         list.sumOf { it.totalPay }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
-    val totalTransactionsToday: StateFlow<Int> = _transactions.map { list ->
+    val totalTransactionsToday: StateFlow<Int> = filteredTransactionsReport.map { list ->
         list.size
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    val totalItemsSoldToday: StateFlow<Int> = _transactions.map { list ->
+    val totalItemsSoldToday: StateFlow<Int> = filteredTransactionsReport.map { list ->
         list.flatMap { it.items }.sumOf { it.quantity }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    // Fitur grouping logika sales hari ini
-    val groupedSalesToday: StateFlow<List<GroupedProductSales>> = _transactions.map { list ->
+    // Fitur grouping logika sales berdasarkan tanggal filter yang dipilih
+    val groupedSalesToday: StateFlow<List<GroupedProductSales>> = filteredTransactionsReport.map { list ->
         list.flatMap { it.items }
             .groupBy { it.product.id }
             .map { (productId, cartItems) ->
