@@ -7,8 +7,18 @@ workflows:
       - name: Set up local.properties
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+      - name: Berikan Izin Akses Gradle
+        script: |
+          chmod +x gradlew || chmod +x android/gradlew || true
       - name: Build Android APK
         script: |
-          ./gradlew assembleDebug
+          if [ -f "gradlew" ]; then
+            ./gradlew assembleDebug
+          elif [ -f "android/gradlew" ]; then
+            cd android && ./gradlew assembleDebug
+          else
+            echo "File gradlew tidak ditemukan di folder manapun!" && exit 1
+          fi
     artifacts:
       - app/build/outputs/apk/**/*.apk
+      - android/app/build/outputs/apk/**/*.apk
