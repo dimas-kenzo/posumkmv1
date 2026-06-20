@@ -7,10 +7,10 @@ workflows:
       - name: Set up local.properties
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-      - name: Buat Otomatis File Gradlew yang Hilang
+      - name: Buat Otomatis File Gradlew Versi Terbaru
         script: |
-          # Memaksa sistem membuat wrapper gradle versi standar Android terbaru
-          gradle wrapper --gradle-version 8.5
+          # Memperbarui mesin perakit ke versi 9.3.1 sesuai kebutuhan proyek
+          gradle wrapper --gradle-version 9.3.1
           chmod +x gradlew
       - name: Build Android APK
         script: |
